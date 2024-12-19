@@ -1,0 +1,38 @@
+version: "3"
+services:
+  wireguard:
+    image: linuxserver/wireguard:latest
+    cap_add:
+      - net_admin
+      - sys_module
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin
+    healthcheck:
+      test: ["CMD", "/bin/ping", "-c", "4", "10.123.123.1"]
+      interval: 120s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - /config/wireguard/wg0.conf:/config/wg0.conf
+      - /lib/modules:/lib/modules
+    ports:
+      - 53333:53333/udp # Wireguard server Port
+      - 32222:32222 # Wireguard sidecar Port
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv6.conf.all.disable_ipv6=0
+    restart: unless-stopped
+
+  homeassistant:
+    container_name: homeassistant
+    image: "ghcr.io/home-assistant/home-assistant:stable"
+    volumes:
+      - /config/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
