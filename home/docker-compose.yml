@@ -1,0 +1,104 @@
+version: "3.8"
+
+# Setup-Standards
+x-default-container: &default-container
+  environment:
+    - PUID=0
+    - PGID=0
+    - TZ=Europe/Berlin
+  restart: unless-stopped
+
+services:
+  traefik:
+    container_name: traefik
+    image: traefik
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.defaultRule=HostRegexp(`^{{ .ContainerName }}.*$`)"
+      - "--entrypoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.email=jonasgrosch96@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=acme.json"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.admin.entrypoints=web"
+      - "traefik.http.services.admin.loadbalancer.server.port=8080"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.lan`)"
+    restart: unless-stopped
+    networks:
+      - vpn
+    extra_hosts:
+      - host.docker.internal:172.17.0.1
+
+  adguard:
+    image: adguard/adguardhome
+    container_name: adguard
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adguard.rule=Host(`adguard.lan`)"
+      - "traefik.http.services.adguard.loadbalancer.server.port=5353"
+    ports:
+      - 53:53/tcp
+      - 53:53/udp
+      - 784:784/udp
+      - 853:853/tcp
+      - 3000:3000/tcp
+      - 5353:80/tcp
+      - 5354:443/tcp
+    volumes:
+      - adguard_work:/opt/adguardhome/work
+      - adguard_conf:/opt/adguardhome/conf
+    restart: unless-stopped
+
+  homeassistant:
+    <<: *default-container
+    container_name: homeassistant
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.homeassistant.loadbalancer.server.port=8123"
+      - "traefik.http.routers.homeassistant.rule=Host(`homeassistant.lan`) || Host(`home.grosch.io`)"
+      - "traefik.http.routers.homeassistant.tls=true"
+      - "traefik.http.routers.homeassistant.tls.certresolver=myresolver"
+      - "traefik.http.routers.homeassistant.tls.domains[0].main=home.grosch.io"
+    image: "ghcr.io/home-assistant/home-assistant:stable"
+    volumes:
+      - homeassistant_config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+    privileged: true
+    network_mode: host
+
+volumes:
+  # ------------------------------------------------
+  # PER-SERVICE CONFIG VOLUMES
+  # ------------------------------------------------
+
+  adguard_work:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/adguard/work"
+  adguard_conf:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/adguard/conf"
+
+  homeassistant_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/homeassistant"
