@@ -82,8 +82,8 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.jellyseerr.rule=Host(`jellyseerr.lan`)"
       - "traefik.http.services.jellyseerr.loadbalancer.server.port=5055"
-#    volumes: 
-#      - jellyseerr_config:/app/config
+    volumes: 
+      - jellyseerr_config:/app/config
     depends_on: 
       - tailscale
       - sonarr 
@@ -115,7 +115,6 @@ services:
     depends_on: 
       - tailscale
       - prowlarr 
-      - jellyfin 
 
   sonarr: 
     <<: *mediarr-container
@@ -132,7 +131,6 @@ services:
     depends_on: 
       - tailscale
       - prowlarr 
-      - jellyfin 
 
 volumes:
   media:
