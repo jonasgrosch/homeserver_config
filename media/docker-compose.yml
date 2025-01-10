@@ -10,7 +10,7 @@ x-default-container: &default-container
 
 services:
   jellyfin:
-    <<: *mediarr-container
+    <<: *default-container
     container_name: jellyfin 
     image: jellyfin/jellyfin
     labels:
