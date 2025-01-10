@@ -37,8 +37,6 @@ services:
       - sys_module
     sysctls:
       - net.ipv4.conf.eth0.rp_filter=2
-    networks:
-      - vpn
     ports:
       - 53333:53333/udp # Wireguard server Port
       - 32222:32222     # Wireguard sidecar Port
