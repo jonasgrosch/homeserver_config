@@ -37,6 +37,9 @@ services:
     restart: unless-stopped
     extra_hosts:
       - host.docker.internal:172.17.0.1
+      - host.docker.internal:172.18.0.1
+      - host.docker.internal:172.19.0.1
+      - host.docker.internal:172.20.0.1
 
   adguard:
     image: adguard/adguardhome
