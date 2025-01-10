@@ -8,47 +8,9 @@ x-default-container: &default-container
     - TZ=Europe/Berlin
   restart: unless-stopped
 
-# Media access for media containers
-x-mediarr-container: &mediarr-container
-  <<: *default-container
-  network_mode: service:tailscale
-  depends_on:
-    - tailscale
-
 services:
-  tailscale:
-    <<: *default-container
-    container_name: tailscale
-    image: tailscale/tailscale:latest
-    environment:
-      - TS_EXTRA_ARGS=--accept-routes --advertise-routes=192.168.178.0/24 --exit-node=100.76.46.72 --exit-node-allow-lan-access
-      - TS_HOSTNAME=mediarr
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_ACCEPT_DNS=true
-      - TS_USERSPACE=false
-    volumes:
-      - tailscale_state:/var/lib/tailscale
-      - /lib/modules:/lib/modules            # host bind (needed for kernel modules)
-    privileged: true
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - net_admin
-      - sys_module
-    sysctls:
-      - net.ipv4.conf.eth0.rp_filter=2
-    ports:
-      - 53333:53333/udp # Wireguard server Port
-      - 32222:32222     # Wireguard sidecar Port
-      - 8081:8080       # sabnzbd
-      - 6767:6767       # bazarr
-      - 5055:5055       # jellyseerr
-      - 9696:9696       # prowlarr
-      - 7878:7878       # radarr
-      - 8989:8989       # sonarr
-
   sabnzbd:
-    <<: *mediarr-container
+    <<: *default-container
     container_name: sabnzbd
     image: linuxserver/sabnzbd
     labels:
@@ -58,9 +20,11 @@ services:
     volumes:
       - sabnzbd_config:/config
       - downloads:/mnt/downloads
+    ports:
+      - 8081:8080       # sabnzbd
 
   bazarr: 
-    <<: *mediarr-container
+    <<: *default-container
     image: linuxserver/bazarr 
     container_name: bazarr 
     labels:
@@ -70,12 +34,13 @@ services:
     volumes: 
       - bazarr_config:/config 
     depends_on:
-      - tailscale
       - sonarr 
       - radarr 
-
+    ports:
+      - 6767:6767       # bazarr
+  
   jellyseerr: 
-    <<: *mediarr-container
+    <<: *default-container
     image: fallenbagel/jellyseerr
     container_name: jellyseerr 
     labels:
@@ -85,12 +50,13 @@ services:
     volumes: 
       - jellyseerr_config:/app/config
     depends_on: 
-      - tailscale
       - sonarr 
       - radarr
+    ports:
+      - 5055:5055
 
   prowlarr: 
-    <<: *mediarr-container
+    <<: *default-container
     image: linuxserver/prowlarr 
     container_name: prowlarr 
     labels:
@@ -99,9 +65,11 @@ services:
       - "traefik.http.services.prowlarr.loadbalancer.server.port=9696"
     volumes: 
       - prowlarr_config:/config 
+    ports:
+      - 9696:9696
 
   radarr: 
-    <<: *mediarr-container
+    <<: *default-container
     image: linuxserver/radarr 
     container_name: radarr 
     labels:
@@ -113,11 +81,12 @@ services:
       - media:/mnt/media 
       - downloads:/mnt/downloads 
     depends_on: 
-      - tailscale
       - prowlarr 
+    ports:
+      - 7878:7878       # radarr
 
   sonarr: 
-    <<: *mediarr-container
+    <<: *default-container
     image: lscr.io/linuxserver/sonarr:latest 
     container_name: sonarr 
     labels:
@@ -129,8 +98,9 @@ services:
       - media:/mnt/media 
       - downloads:/mnt/downloads 
     depends_on: 
-      - tailscale
       - prowlarr 
+    ports:
+      - 8989:8989
 
 volumes:
   media:
@@ -150,13 +120,6 @@ volumes:
   # ------------------------------------------------
   # PER-SERVICE CONFIG VOLUMES
   # ------------------------------------------------
-
-  tailscale_state:
-    driver: local
-    driver_opts:
-      type: "nfs"
-      o: "addr=192.168.178.74,nolock,soft,rw"
-      device: ":/var/nfs/shared/configs/tailscale/state"
 
   sabnzbd_config:
     driver: local
