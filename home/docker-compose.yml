@@ -2,6 +2,7 @@ version: "3.8"
 
 # Setup-Standards
 x-default-container: &default-container
+  network_mode: bridge
   environment:
     - PUID=0
     - PGID=0
@@ -37,7 +38,6 @@ services:
     restart: unless-stopped
     extra_hosts:
       - host.docker.internal:172.17.0.1
-    network_mode: bridge
 
   adguard:
     image: adguard/adguardhome
@@ -58,7 +58,6 @@ services:
       - adguard_work:/opt/adguardhome/work
       - adguard_conf:/opt/adguardhome/conf
     restart: unless-stopped
-    network_mode: bridge
 
   homeassistant:
     <<: *default-container

@@ -2,6 +2,7 @@ version: "3.8"
 
 # Setup-Standards
 x-default-container: &default-container
+  network_mode: bridge
   environment:
     - PUID=0
     - PGID=0
@@ -25,13 +26,12 @@ services:
       - /dev/dri/renderD128:/dev/dri/renderD128
     ports:
       - 8096:8096
-    network_mode: bridge
+
 
   plex:
     <<: *default-container
     image: lscr.io/linuxserver/plex:latest
     container_name: plex
-    network_mode: host
     environment:
       - VERSION=docker
     labels:
@@ -43,7 +43,6 @@ services:
       - media:/mnt/media 
     ports:
       - 32400:32400
-    network_mode: bridge
 
 volumes:
   media:

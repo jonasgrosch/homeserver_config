@@ -2,6 +2,7 @@ version: "3.8"
 
 # Setup-Standards
 x-default-container: &default-container
+  network_mode: bridge
   environment:
     - PUID=0
     - PGID=0
@@ -22,7 +23,6 @@ services:
       - downloads:/mnt/downloads
     ports:
       - 8081:8080
-    network_mode: bridge
 
   bazarr: 
     <<: *default-container
@@ -39,7 +39,6 @@ services:
       - radarr 
     ports:
       - 6767:6767
-    network_mode: bridge
 
   
   jellyseerr: 
@@ -57,7 +56,6 @@ services:
       - radarr
     ports:
       - 5055:5055
-    network_mode: bridge
 
   prowlarr: 
     <<: *default-container
@@ -71,7 +69,6 @@ services:
       - prowlarr_config:/config 
     ports:
       - 9696:9696
-    network_mode: bridge
 
   radarr: 
     <<: *default-container
@@ -89,7 +86,6 @@ services:
       - prowlarr 
     ports:
       - 7878:7878
-    network_mode: bridge
 
   sonarr: 
     <<: *default-container
@@ -107,7 +103,6 @@ services:
       - prowlarr 
     ports:
       - 8989:8989
-    network_mode: bridge
 
 volumes:
   media:
