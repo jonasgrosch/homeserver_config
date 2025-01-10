@@ -2,7 +2,8 @@ version: "3.8"
 
 # Setup-Standards
 x-default-container: &default-container
-  network_mode: bridge
+  networks:
+    - mediarr
   environment:
     - PUID=0
     - PGID=0
@@ -164,3 +165,6 @@ volumes:
       type: "nfs"
       o: "addr=192.168.178.74,nolock,soft,rw"
       device: ":/var/nfs/shared/configs/mediarr/sonarr"
+
+networks:
+  mediarr:

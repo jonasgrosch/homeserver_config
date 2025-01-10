@@ -2,7 +2,8 @@ version: "3.8"
 
 # Setup-Standards
 x-default-container: &default-container
-  network_mode: bridge
+  networks:
+    - home
   environment:
     - PUID=0
     - PGID=0
@@ -35,7 +36,6 @@ services:
       - "traefik.http.routers.admin.entrypoints=web"
       - "traefik.http.services.admin.loadbalancer.server.port=8080"
       - "traefik.http.routers.traefik.rule=Host(`traefik.lan`)"
-      - "traefik.docker.network=docker_external"
     restart: unless-stopped
     extra_hosts:
       - host.docker.internal:172.17.0.1
@@ -77,6 +77,9 @@ services:
       - /run/dbus:/run/dbus:ro
     privileged: true
     network_mode: host
+
+networks:
+  home:
 
 volumes:
   # ------------------------------------------------
