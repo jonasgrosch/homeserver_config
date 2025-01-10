@@ -1,38 +1,345 @@
-version: "3"
+version: "3.8"
+
+# Setup-Standards
+x-default-container: &default-container
+  environment:
+    - PUID=0
+    - PGID=0
+    - TZ=Europe/Berlin
+  restart: unless-stopped
+
+# Media access for media containers
+x-mediarr-container: &mediarr-container
+  <<: *default-container
+  network_mode: service:tailscale
+  depends_on:
+    - tailscale
+
 services:
-  wireguard:
-    image: linuxserver/wireguard:latest
+  traefik:
+    container_name: traefik
+    image: traefik
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.defaultRule=HostRegexp(`^{{ .ContainerName }}.*$`)"
+      - "--entrypoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.email=jonasgrosch96@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=acme.json"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.admin.entrypoints=web"
+      - "traefik.http.services.admin.loadbalancer.server.port=8080"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.lan`)"
+    restart: unless-stopped
+    networks:
+      - vpn
+    extra_hosts:
+      - host.docker.internal:172.17.0.1
+
+  adguard:
+    image: adguard/adguardhome
+    container_name: adguard
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adguard.rule=Host(`adguard.lan`)"
+      - "traefik.http.services.adguard.loadbalancer.server.port=5353"
+    ports:
+      - 53:53/tcp
+      - 53:53/udp
+      - 784:784/udp
+      - 853:853/tcp
+      - 3000:3000/tcp
+      - 5353:80/tcp
+      - 5354:443/tcp
+    volumes:
+      - adguard_work:/opt/adguardhome/work
+      - adguard_conf:/opt/adguardhome/conf
+    restart: unless-stopped
+
+  tailscale:
+    <<: *default-container
+    container_name: tailscale
+    image: tailscale/tailscale:latest
+    environment:
+      - TS_EXTRA_ARGS=--accept-routes --advertise-routes=192.168.178.0/24 --exit-node=100.76.46.72 --exit-node-allow-lan-access
+      - TS_HOSTNAME=mediarr
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ACCEPT_DNS=true
+      - TS_USERSPACE=false
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+      - /lib/modules:/lib/modules            # host bind (needed for kernel modules)
+    privileged: true
+    devices:
+      - /dev/net/tun:/dev/net/tun
     cap_add:
       - net_admin
       - sys_module
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Berlin
-    healthcheck:
-      test: ["CMD", "/bin/ping", "-c", "4", "10.123.123.1"]
-      interval: 120s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    volumes:
-      - /config/wireguard/wg0.conf:/config/wg0.conf
-      - /lib/modules:/lib/modules
+    sysctls:
+      - net.ipv4.conf.eth0.rp_filter=2
+    networks:
+      - vpn
     ports:
       - 53333:53333/udp # Wireguard server Port
-      - 32222:32222 # Wireguard sidecar Port
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
-      - net.ipv6.conf.all.disable_ipv6=0
-    restart: unless-stopped
+      - 32222:32222     # Wireguard sidecar Port
+      - 8081:8080       # sabnzbd
+      - 8096:8096       # jellyfin
+      - 6767:6767       # bazarr
+      - 5055:5055       # jellyseerr
+      - 9696:9696       # prowlarr
+      - 7878:7878       # radarr
+      - 8989:8989       # sonarr
 
   homeassistant:
+    <<: *default-container
     container_name: homeassistant
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homeassistant.rule=Host(`homeassistant.lan`) || Host(`home.grosch.io`)"
+      - "traefik.http.services.homeassistant.loadbalancer.server.port=8123"
+      - "traefik.http.routers.homeassistant.tls=true"
+      - "traefik.http.routers.homeassistant.tls.certresolver=myresolver"
+      - "traefik.http.routers.homeassistant.tls.domains[0].main=home.grosch.io"
     image: "ghcr.io/home-assistant/home-assistant:stable"
     volumes:
-      - /config/homeassistant:/config
+      - homeassistant_config:/config
       - /etc/localtime:/etc/localtime:ro
       - /run/dbus:/run/dbus:ro
-    restart: unless-stopped
     privileged: true
     network_mode: host
+
+  jellyfin:
+    <<: *mediarr-container
+    container_name: jellyfin 
+    image: jellyfin/jellyfin
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.lan`)"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+    volumes: 
+      - jellyfin_config:/config
+      - jellyfin_cache:/cache
+      - media:/mnt/media 
+    devices: 
+      - /dev/dri/renderD128:/dev/dri/renderD128
+
+  plex:
+    <<: *default-container
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    network_mode: host
+    environment:
+      - VERSION=docker
+    volumes:
+      - plex_config:/config
+      - media:/mnt/media 
+
+  sabnzbd:
+    <<: *mediarr-container
+    container_name: sabnzbd
+    image: linuxserver/sabnzbd
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sabnzbd.rule=Host(`sabnzbd.lan`)"
+      - "traefik.http.services.sabnzbd.loadbalancer.server.port=8080"
+    volumes:
+      - sabnzbd_config:/config
+      - downloads:/mnt/downloads
+
+  bazarr: 
+    <<: *mediarr-container
+    image: linuxserver/bazarr 
+    container_name: bazarr 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bazarr.rule=Host(`bazarr.lan`)"
+      - "traefik.http.services.bazarr.loadbalancer.server.port=6767"
+    volumes: 
+      - bazarr_config:/config 
+    depends_on:
+      - tailscale
+      - sonarr 
+      - radarr 
+
+  jellyseerr: 
+    <<: *mediarr-container
+    image: fallenbagel/jellyseerr 
+    container_name: jellyseerr 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyseerr.rule=Host(`jellyseerr.lan`)"
+      - "traefik.http.services.jellyseerr.loadbalancer.server.port=5055"
+    volumes: 
+      - jellyseerr_config:/app/config
+    depends_on: 
+      - tailscale
+      - sonarr 
+      - radarr
+
+  prowlarr: 
+    <<: *mediarr-container
+    image: linuxserver/prowlarr 
+    container_name: prowlarr 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.lan`)"
+      - "traefik.http.services.prowlarr.loadbalancer.server.port=9696"
+    volumes: 
+      - prowlarr_config:/config 
+
+  radarr: 
+    <<: *mediarr-container
+    image: linuxserver/radarr 
+    container_name: radarr 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.radarr.rule=Host(`radarr.lan`)"
+      - "traefik.http.services.radarr.loadbalancer.server.port=7878"
+    volumes: 
+      - radarr_config:/config
+      - media:/mnt/media 
+      - downloads:/mnt/downloads 
+    depends_on: 
+      - tailscale
+      - prowlarr 
+      - jellyfin 
+
+  sonarr: 
+    <<: *mediarr-container
+    image: lscr.io/linuxserver/sonarr:latest 
+    container_name: sonarr 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonarr.rule=Host(`sonarr.lan`)"
+      - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
+    volumes: 
+      - sonarr_config:/config
+      - media:/mnt/media 
+      - downloads:/mnt/downloads 
+    depends_on: 
+      - tailscale
+      - prowlarr 
+      - jellyfin 
+
+networks: 
+  vpn: 
+    driver: bridge
+
+volumes:
+  media:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/media"
+  
+  downloads:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/downloads"
+
+  # ------------------------------------------------
+  # PER-SERVICE CONFIG VOLUMES
+  # ------------------------------------------------
+
+  adguard_work:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/adguard/work"
+  adguard_conf:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/adguard/conf"
+
+  tailscale_state:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/tailscale/state"
+
+  homeassistant_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/homeassistant"
+
+  jellyfin_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/jellyfin/config"
+  jellyfin_cache:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/jellyfin/cache"
+
+  plex_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/plex"
+
+  sabnzbd_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/sabnzbd/config"
+
+  bazarr_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/mediarr/bazarr"
+
+  jellyseerr_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/mediarr/jellyseerr"
+
+  prowlarr_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/mediarr/prowlarr"
+
+  radarr_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/mediarr/radarr"
+
+  sonarr_config:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.178.74,nolock,soft,rw"
+      device: ":/var/nfs/shared/configs/mediarr/sonarr"
