@@ -35,6 +35,7 @@ services:
       - "traefik.http.routers.admin.entrypoints=web"
       - "traefik.http.services.admin.loadbalancer.server.port=8080"
       - "traefik.http.routers.traefik.rule=Host(`traefik.lan`)"
+      - "traefik.docker.network=docker_external"
     restart: unless-stopped
     extra_hosts:
       - host.docker.internal:172.17.0.1
@@ -75,6 +76,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /run/dbus:/run/dbus:ro
     privileged: true
+    network_mode: host
 
 volumes:
   # ------------------------------------------------
