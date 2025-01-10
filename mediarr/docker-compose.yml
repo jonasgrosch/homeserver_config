@@ -76,7 +76,7 @@ services:
 
   jellyseerr: 
     <<: *mediarr-container
-    image: fallenbagel/jellyseerr:2.2.2
+    image: fallenbagel/jellyseerr
     container_name: jellyseerr 
     labels:
       - "traefik.enable=true"
