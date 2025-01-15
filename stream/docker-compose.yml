@@ -1,6 +1,5 @@
 version: "3.8"
 
-# Setup-Standards
 x-default-container: &default-container
   environment:
     - PUID=0
@@ -25,12 +24,14 @@ services:
       - /dev/dri/renderD128:/dev/dri/renderD128
     ports:
       - 8096:8096
-
+    networks:
+      stream-network:
+        ipv4_address: 172.16.1.3
 
   plex:
     <<: *default-container
-    image: lscr.io/linuxserver/plex:latest
     container_name: plex
+    image: lscr.io/linuxserver/plex:latest
     environment:
       - VERSION=docker
     labels:
@@ -42,6 +43,9 @@ services:
       - media:/mnt/media 
     ports:
       - 32400:32400
+    networks:
+      stream-network:
+        ipv4_address: 172.16.1.4
 
 volumes:
   media:
@@ -51,15 +55,13 @@ volumes:
       o: "addr=192.168.178.74,nolock,soft,rw"
       device: ":/var/nfs/shared/media"
 
-  # ------------------------------------------------
-  # PER-SERVICE CONFIG VOLUMES
-  # ------------------------------------------------
   jellyfin_config:
     driver: local
     driver_opts:
       type: "nfs"
       o: "addr=192.168.178.74,nolock,soft,rw"
       device: ":/var/nfs/shared/configs/jellyfin/config"
+
   jellyfin_cache:
     driver: local
     driver_opts:
@@ -73,3 +75,8 @@ volumes:
       type: "nfs"
       o: "addr=192.168.178.74,nolock,soft,rw"
       device: ":/var/nfs/shared/configs/plex"
+
+networks:
+  stream-network:
+    external: true
+    name: stream-network

@@ -1,6 +1,5 @@
 version: "3.8"
 
-# Setup-Standards
 x-default-container: &default-container
   environment:
     - PUID=0
@@ -37,10 +36,18 @@ services:
     restart: unless-stopped
     extra_hosts:
       - host.docker.internal:172.17.0.1
+    networks:
+      traefik-network:
+        ipv4_address: 172.16.0.2
+      stream-network:
+        ipv4_address: 172.16.1.2
+      arrs-network:
+        ipv4_address: 172.16.2.2
 
   adguard:
-    image: adguard/adguardhome
+    <<: *default-container
     container_name: adguard
+    image: adguard/adguardhome
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.adguard.rule=Host(`adguard.lan`)"
@@ -56,7 +63,9 @@ services:
     volumes:
       - adguard_work:/opt/adguardhome/work
       - adguard_conf:/opt/adguardhome/conf
-    restart: unless-stopped
+    networks:
+      traefik-network:
+        ipv4_address: 172.16.0.3
 
   homeassistant:
     <<: *default-container
@@ -75,18 +84,28 @@ services:
       - /run/dbus:/run/dbus:ro
     privileged: true
     network_mode: host
+    # (No Docker network needed for host mode)
+
+  matter-server:
+    container_name: matter-server
+    image: ghcr.io/home-assistant-libs/python-matter-server:stable
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    volumes:
+      - /opt/matter-server:/data
+      - /run/dbus:/run/dbus:ro
+    network_mode: host
+    # (No Docker network needed for host mode)
 
 volumes:
-  # ------------------------------------------------
-  # PER-SERVICE CONFIG VOLUMES
-  # ------------------------------------------------
-
   adguard_work:
     driver: local
     driver_opts:
       type: "nfs"
       o: "addr=192.168.178.74,nolock,soft,rw"
       device: ":/var/nfs/shared/configs/adguard/work"
+
   adguard_conf:
     driver: local
     driver_opts:
@@ -100,3 +119,31 @@ volumes:
       type: "nfs"
       o: "addr=192.168.178.74,nolock,soft,rw"
       device: ":/var/nfs/shared/configs/homeassistant"
+
+networks:
+  # Network 1: for Traefik and services in this file
+  traefik-network:
+    name: traefik-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.0.0/24
+          gateway: 172.16.0.1
+
+  # Network 2: for Jellyfin/Plex
+  stream-network:
+    name: stream-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.1.0/24
+          gateway: 172.16.1.1
+
+  # Network 3: for sabnzbd, radarr, sonarr, etc.
+  arrs-network:
+    name: arrs-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.2.0/24
+          gateway: 172.16.2.1

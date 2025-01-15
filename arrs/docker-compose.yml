@@ -1,6 +1,5 @@
 version: "3.8"
 
-# Setup-Standards
 x-default-container: &default-container
   environment:
     - PUID=0
@@ -22,6 +21,9 @@ services:
       - downloads:/mnt/downloads
     ports:
       - 8081:8080
+    networks:
+      arrs-network:
+        ipv4_address: 172.16.2.10
 
   bazarr: 
     <<: *default-container
@@ -38,7 +40,9 @@ services:
       - radarr 
     ports:
       - 6767:6767
-
+    networks:
+      arrs-network:
+        ipv4_address: 172.16.2.11
   
   jellyseerr: 
     <<: *default-container
@@ -55,6 +59,11 @@ services:
       - radarr
     ports:
       - 5055:5055
+    networks:
+      arrs-network:
+        ipv4_address: 172.16.2.12
+      stream-network:
+        ipv4_address: 172.16.1.5
 
   prowlarr: 
     <<: *default-container
@@ -68,6 +77,9 @@ services:
       - prowlarr_config:/config 
     ports:
       - 9696:9696
+    networks:
+      arrs-network:
+        ipv4_address: 172.16.2.13
 
   radarr: 
     <<: *default-container
@@ -85,6 +97,9 @@ services:
       - prowlarr 
     ports:
       - 7878:7878
+    networks:
+      arrs-network:
+        ipv4_address: 172.16.2.14
 
   sonarr: 
     <<: *default-container
@@ -102,6 +117,9 @@ services:
       - prowlarr 
     ports:
       - 8989:8989
+    networks:
+      arrs-network:
+        ipv4_address: 172.16.2.15
 
 volumes:
   media:
@@ -117,10 +135,6 @@ volumes:
       type: "nfs"
       o: "addr=192.168.178.74,nolock,soft,rw"
       device: ":/var/nfs/shared/downloads"
-
-  # ------------------------------------------------
-  # PER-SERVICE CONFIG VOLUMES
-  # ------------------------------------------------
 
   sabnzbd_config:
     driver: local
@@ -163,3 +177,12 @@ volumes:
       type: "nfs"
       o: "addr=192.168.178.74,nolock,soft,rw"
       device: ":/var/nfs/shared/configs/mediarr/sonarr"
+
+networks:
+  arrs-network:
+    external: true
+    name: arrs-network
+
+  stream-network:
+    external: true
+    name: stream-network
