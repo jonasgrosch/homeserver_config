@@ -98,6 +98,26 @@ services:
     network_mode: host
     # (No Docker network needed for host mode)
 
+  whisper:
+    <<: *default-container
+    container_name: whisper
+    image: rhasspy/wyoming-whisper
+    command: --model tiny-int8 --language en
+    volumes:
+      - /opt/whisper-data:/data
+    restart: unless-stopped
+    network_mode: host
+
+  piper:
+    <<: *default-container
+    container_name: piper
+    image: rhasspy/wyoming-piper
+    command: --voice en_US-lessac-medium
+    volumes:
+      - /opt/piper-data:/data
+    restart: unless-stopped
+    network_mode: host
+
 volumes:
   adguard_work:
     driver: local

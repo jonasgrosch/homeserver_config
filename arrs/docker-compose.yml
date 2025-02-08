@@ -131,10 +131,6 @@ volumes:
   
   downloads:
     driver: local
-    driver_opts:
-      type: "nfs"
-      o: "addr=192.168.178.74,nolock,soft,rw"
-      device: ":/var/nfs/shared/downloads"
 
   sabnzbd_config:
     driver: local
